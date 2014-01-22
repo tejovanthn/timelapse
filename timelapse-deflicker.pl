@@ -2,6 +2,7 @@
 
 # Script for simple and fast photo deflickering using imagemagick library
 # Copyright Vangelis Tasoulas (cyberang3l@gmail.com)
+# Modified for use with Makefile by Tejovanth N
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,11 +33,13 @@ my $VERBOSE       = 0;
 my $DEBUG         = 0;
 my $RollingWindow = 15;
 my $Passes        = 1;
+my $data_dir      = '.';
+my $outputDir     = 'Deflickered';
 
 #####################
 # handle flags and arguments
 # Example: c == "-c", c: == "-c argument"
-my $opt_string = 'hvdw:p:';
+my $opt_string = 'hvdw:p:i:o:';
 getopts( "$opt_string", \my %opt ) or usage() and exit 1;
 
 # print help message if -h is invoked
@@ -49,14 +52,17 @@ $VERBOSE       = 1         if $opt{'v'};
 $DEBUG         = 1         if $opt{'d'};
 $RollingWindow = $opt{'w'} if defined( $opt{'w'} );
 $Passes        = $opt{'p'} if defined( $opt{'p'} );
+$data_dir      = $opt{'i'} if defined( $opt{'i'} );
+$outputDir     = $opt{'o'} if defined( $opt{'o'} );
+
+say "Input dir : $data_dir";
+say "Output dir : $outputDir";
 
 die "The rolling average window for luminance smoothing should be a positive number greater or equal to 2" if ( $RollingWindow < 2 );
 die "The number of passes should be a positive number greater or equal to 1"                               if ( $Passes < 1 );
 
 # main program content
 my %luminance;
-
-my $data_dir = ".";
 
 opendir( DATA_DIR, $data_dir ) || die "Cannot open $data_dir\n";
 my @files = readdir(DATA_DIR);
@@ -72,15 +78,16 @@ if ( scalar @files != 0 ) {
   foreach my $filename (@files) {
 
     my $ft   = File::Type->new();
-    my $type = $ft->mime_type($filename);
-
+    my $type = $ft->mime_type($data_dir . $filename);
+    
     #say "$data_dir/$filename";
     my ( $filetype, $fileformat ) = split( /\//, $type );
+    
     if ( $filetype eq "image" ) {
-      verbose("Original luminance of Image $filename is being processed...\n");
+      verbose("Original luminance of Image $data_dir$filename is being processed...\n");
 
       my $image = Image::Magick->new;
-      $image->Read($filename);
+      $image->Read($data_dir . $filename);
       my @statistics = $image->Statistics();
       my $R          = @statistics[ ( 0 * 7 ) + 3 ];
       my $G          = @statistics[ ( 1 * 7 ) + 3 ];
@@ -90,7 +97,7 @@ if ( scalar @files != 0 ) {
 
       #$luminance{$count}{original} = 0.2126 * $R + 0.7152 * $G + 0.0722 * $B;
       $luminance{$count}{value}    = $luminance{$count}{original};
-      $luminance{$count}{filename} = $filename;
+      $luminance{$count}{filename} = $data_dir.$filename;
 
       #$luminance{$count}{abs_path_filename} = File::Spec->rel2abs($filename);
       $count++;
@@ -158,8 +165,8 @@ sub luminance_change {
 
     #debug("Imagemagick will set gamma value of $luminance{$i}{filename} to: $gamma\n");
 
-    if ( !-d "Deflickered" ) {
-      mkdir("Deflickered") || die "Error creating directory: $!\n";
+    if ( !-d $outputDir ) {
+      mkdir($outputDir) || die "Error creating directory: $!\n";
     }
 
     debug("Changing brightness of $luminance{$i}{filename} and saving to the destination directory...\n");
@@ -169,7 +176,7 @@ sub luminance_change {
     $image->Mogrify( 'modulate', brightness => $brightness );
 
     #$image->Gamma( gamma => $gamma, channel => 'All' );
-    $image->Write( "Deflickered/" . $luminance{$i}{filename} );
+    $image->Write( $outputDir . '/' . $luminance{$i}{filename} );
 
     $progress->update( $i + 1 );
   }
@@ -186,6 +193,8 @@ sub usage {
   say "-h    Usage";
   say "-v    Verbose";
   say "-d    Debug";
+  say "-i    input directory";
+  say "-o    output directory";
 }
 
 sub verbose {

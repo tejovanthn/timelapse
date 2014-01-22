@@ -1,55 +1,111 @@
-ROOT_DIR  = $(HOME)/timelapse
+#
+# Makefile for automated timelapse processing
+# Author: Tejovanth N 
+#
+# Required:
+# gcp        : sudo apt-get install gcp
+# parallel   : sudo apt-get install parallel && sudo rm /etc/parallel/config 
+# mogrify    : sudo apt-get install imagemagick
+# perlmagick : sudo apt-get install perlmagick libfile-type-perl libterm-progressbar-perl
+# mencoder   : sudo apt-get install mencoder
+# avconv     : sudo apt-get install libav-tools
+#
+#
 
-PHOTOS    = ~/Pictures
-FPS       = 15
+ROOT_DIR   = $(HOME)/timelapse
 
-SRC       = $(ROOT_DIR)/src
-RESIZED   = $(ROOT_DIR)/resized
-FILES     = $(ROOT_DIR)/files.txt
-OUTPUT    = $(ROOT_DIR)/output.avi
+PHOTOS     = ~/Pictures
+FPS        = 15
+MODE       = fast 
+DEFLICKER  = yes
 
-DEFLICKER = $(ROOT_DIR)/timelapse-deflicker.pl 
+SRC        = $(ROOT_DIR)/src
+RESIZED    = $(ROOT_DIR)/resized
+FILES      = $(ROOT_DIR)/files.txt
+OUTPUT     = $(ROOT_DIR)/output.avi
 
-CP        = cp -rf
-LS        = ls -ltr 
-CUT       = grep "JPG" | cut -d' ' -f9
-MENCODEC  = mencoder -idx -nosound -noskip -ovc lavc -lavcopts
-FAST      = vcodec=mjpeg
-SLOW      = vcodec=ljpeg
-STAMP     = echo done >
-SPLIT     = split -l $(LINESPROC) -d 
+DEFLICKERD = $(ROOT_DIR)/deflicker 
 
-NPROC     = `nproc`
+CP         = gcp -rf
+LS         = ls -ltr 
+CUT        = grep "JPG" | cut -d' ' -f9
+MENCODEC   = mencoder -idx -nosound -noskip -ovc lavc -lavcopts
+FAST       = vcodec=mjpeg
+SLOW       = vcodec=ljpeg
+STAMP      = echo done >
+RM         = rm -rf
+
+NPROC      = `nproc`
 
 help:
-	@echo "make all PHOTOS=<path> FPS=<default 15>"
+	@echo "make all PHOTOS=<path> [FPS=<default 15> MODE=<fast/slow default fast> DEFLICKER=<yes/no default yes>]"
 
-dir:
+ifeq ($(DEFLICKER), yes)
+WORKING = $(DEFLICKERD)
+else
+WORKING = $(RESIZED)
+endif
+
+dir.chg:
+	@echo "Making dirs"
 	@if [ ! -d $(SRC) ]; then mkdir $(SRC); $(STAMP)dir.chg; fi
 	@if [ ! -d $(RESIZED) ]; then mkdir $(RESIZED); $(STAMP)dir.chg; fi
 
 
-cp_src: dir.chg dir
-	@$(CP) $(PHOTOS) $(SRC)
+cp.chg: dir.chg
+	@echo "Copying files"
+	@$(CP) $(PHOTOS)/*.JPG $(SRC)
 	@$(STAMP)cp.chg
 
-filelist: cp.chg
+$(FILES): cp.chg
+	@echo "Creating filelists"
 	@$(LS) $(SRC) | $(CUT) > $(FILES)
+	@$(STAMP)flt.chg
 
-resize: filelist
-	parallel -j $(NPROC) -i mogrify -path $(RESIZED) -resize 1920x1080! -rotate "-90<" {} -- $(SRC)/*.JPG
+resize: $(FILES)
+	@echo "Resizing"
+	@parallel -j $(NPROC) --eta 'mogrify -path $(RESIZED) -resize 1920x1080! -rotate "-90<" {}' ::: $(SRC)/*.JPG
+	@$(STAMP)res.chg
 
-deflicker: 
-	@echo "add deflicker"
+deflicker: res.chg
+	@echo "Deflickering"
+	./timelapse-deflicker.pl -i $(RESIZED)/ -o $(DEFLICKERD)/
+	@$(STAMP)def.chg
 
-fast: filelist
-	cd $(RESIZED); \
+def.chg: deflicker
+
+fast: $(WORKING)
+	@echo "Fast convert"
+	@cd $(WORKING); \
 	$(MENCODEC) $(FAST) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
 
-slow: filelist
-	cd $(RESIZED); \
+slow: $(WORKING)
+	@echp "Slow convert"
+	@cd $(WORKING); \
 	$(MENCODEC) $(SLOW) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
 
-final: $(OUTPUT)
-	avconv -i output.avi -c:v libx264 -preset slow -crf $(FPS) output-final.mkv
+ifeq ($(DEFLICKER),yes)
+$(WORKING): deflicker
+else
+$(WORKING): resize
+endif
 
+ifeq ($(MODE),slow)
+$(OUTPUT): slow
+else
+$(OUTPUT): fast
+endif
+
+final: $(OUTPUT)
+	@echo "Making final mkv file"
+	@avconv -i output.avi -c:v libx264 -preset slow -crf $(FPS) output-final.mkv
+
+clean:
+	@echo "Removing all files"
+	@$(RM) *.chg
+	@$(RM) $(FILES)
+	@$(RM) $(SRC) $(RESIZED)
+	@$(RM) *.avi
+	@$(RM) *.mkv
+
+all: final

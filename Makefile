@@ -17,18 +17,18 @@ ROOT_DIR   = $(HOME)/timelapse
 PHOTOS     = ~/Pictures
 FPS        = 15
 MODE       = fast 
-DEFLICKER  = yes
+DEFLICKER  = no
 
 SRC        = $(ROOT_DIR)/src
 RESIZED    = $(ROOT_DIR)/resized
 FILES      = $(ROOT_DIR)/files.txt
 OUTPUT     = $(ROOT_DIR)/output.avi
 
-DEFLICKERD = $(ROOT_DIR)/deflicker 
+DEFLICKERD = $(ROOT_DIR)/deflicker
 
 CP         = gcp -rf
 LS         = ls -ltr 
-CUT        = grep "JPG" | cut -d' ' -f9
+CUT        = grep "JPG" | cut -d' ' -f10
 MENCODEC   = mencoder -idx -nosound -noskip -ovc lavc -lavcopts
 FAST       = vcodec=mjpeg
 SLOW       = vcodec=ljpeg
@@ -38,12 +38,14 @@ RM         = rm -rf
 NPROC      = `nproc`
 
 help:
-	@echo "make all PHOTOS=<path> [FPS=<default 15> MODE=<fast/slow default fast> DEFLICKER=<yes/no default yes>]"
+	@echo "make all PHOTOS=<path> [FPS=<default 15> MODE=<fast/slow default fast> DEFLICKER=<yes/no default no>]"
 
 ifeq ($(DEFLICKER), yes)
 WORKING = $(DEFLICKERD)
+WORKCHG = def.chg
 else
 WORKING = $(RESIZED)
+WORKCHG = res.chg
 endif
 
 dir.chg:
@@ -60,35 +62,32 @@ cp.chg: dir.chg
 $(FILES): cp.chg
 	@echo "Creating filelists"
 	@$(LS) $(SRC) | $(CUT) > $(FILES)
-	@$(STAMP)flt.chg
+
+res.chg: resize
 
 resize: $(FILES)
 	@echo "Resizing"
 	@parallel -j $(NPROC) --eta 'mogrify -path $(RESIZED) -resize 1920x1080! -rotate "-90<" {}' ::: $(SRC)/*.JPG
 	@$(STAMP)res.chg
 
+def.chg: deflicker
+
 deflicker: res.chg
 	@echo "Deflickering"
 	./timelapse-deflicker.pl -i $(RESIZED)/ -o $(DEFLICKERD)/
 	@$(STAMP)def.chg
 
-def.chg: deflicker
+.INTERMEDIATE: deflicker resize
 
-fast: $(WORKING)
+fast: $(WORKCHG)
 	@echo "Fast convert"
 	@cd $(WORKING); \
 	$(MENCODEC) $(FAST) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
 
-slow: $(WORKING)
+slow: $(WORKCHG)
 	@echp "Slow convert"
 	@cd $(WORKING); \
 	$(MENCODEC) $(SLOW) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
-
-ifeq ($(DEFLICKER),yes)
-$(WORKING): deflicker
-else
-$(WORKING): resize
-endif
 
 ifeq ($(MODE),slow)
 $(OUTPUT): slow

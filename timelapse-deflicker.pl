@@ -168,15 +168,18 @@ sub luminance_change {
     if ( !-d $outputDir ) {
       mkdir($outputDir) || die "Error creating directory: $!\n";
     }
+    
+    my $outputfile = substr $luminance{$i}{filename}, rindex($luminance{$i}{filename},'/');
 
-    debug("Changing brightness of $luminance{$i}{filename} and saving to the destination directory...\n");
+    debug("Changing brightness of $luminance{$i}{filename} and saving to $outputDir$outputfile...\n");
     my $image = Image::Magick->new;
     $image->Read( $luminance{$i}{filename} );
 
     $image->Mogrify( 'modulate', brightness => $brightness );
 
+
     #$image->Gamma( gamma => $gamma, channel => 'All' );
-    $image->Write( $outputDir . '/' . $luminance{$i}{filename} );
+    $image->Write( $outputDir . $outputfile );
 
     $progress->update( $i + 1 );
   }

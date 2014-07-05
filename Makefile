@@ -17,7 +17,7 @@ ROOT_DIR   = $(HOME)/timelapse
 PHOTOS     = ~/Pictures
 FPS        = 15
 MODE       = fast 
-DEFLICKER  = no
+DEFLICKER  = yes
 
 SRC        = $(ROOT_DIR)/src
 RESIZED    = $(ROOT_DIR)/resized
@@ -38,7 +38,7 @@ RM         = rm -rf
 NPROC      = `nproc`
 
 help:
-	@echo "make all PHOTOS=<path> [FPS=<default 15> MODE=<fast/slow default fast> DEFLICKER=<yes/no default no>]"
+	@echo "make all PHOTOS=<path> [FPS=<default 15> MODE=<fast/slow default fast> DEFLICKER=<yes/no default yes>]"
 
 ifeq ($(DEFLICKER), yes)
 WORKING = $(DEFLICKERD)

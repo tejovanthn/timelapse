@@ -85,7 +85,7 @@ fast: $(WORKCHG)
 	$(MENCODEC) $(FAST) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
 
 slow: $(WORKCHG)
-	@echp "Slow convert"
+	@echo "Slow convert"
 	@cd $(WORKING); \
 	$(MENCODEC) $(SLOW) -o $(OUTPUT) -mf fps=$(FPS) 'mf://@$(FILES)'
 
